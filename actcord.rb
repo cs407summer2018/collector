@@ -7,11 +7,12 @@ load "models.rb"
 
 keys = YAML::load_file("env.conf")
 
-machine_name = keys["cli"]["machine_name"]
-hostname = "#{machine_name}.cs.purdue.edu"
-username = keys["cli"]["username"]
-password = keys["cli"]["password"]
-cmd = "who"
+@machine_suffix = ".cs.purdue.edu"
+@email_suffix = "@purdue.edu"
+# machine_name = keys["cli"]["machine_name"]
+@username = keys["cli"]["username"]
+@password = keys["cli"]["password"]
+@cmd = "who"
 
 ActiveRecord::Base.
   establish_connection(
@@ -21,35 +22,101 @@ ActiveRecord::Base.
      :password => keys["db"]["password"],
      :database => keys["db"]["database"]})
 
-# room = Room.all
-# puts room.first.capacity
-# puts room.first.building
-# puts room.first.building.address
-
-# b = Building.new(name: "rex", address: "2813 rex st", abbrev: "WRX")
-# b.save
 #create == #new -> #save
-# puts machine_name
-# puts hostname
-# puts username
+puts Machine.count
 
+def run_for_machine(machine)
 
-Room.where(room_number: "B148").first.machines.each do |machine|
-  hname = "#{machine.name}.cs.purdue.edu"
-  Net::SSH.start(hname, username, password: password) do |ssh|
-    res = ssh.exec!(cmd)
-    if !res.blank?
-      puts "$$$$$ #{hname} $$$$$"
-      puts res
+  hostname = "#{machine.name}#{@machine_suffix}"
+  os = machine.room.specifications.first.OS
+  return if os != "Linux"
+  puts "Attempting to SSH into #{hostname}"
+  Net::SSH.start(hostname, @username, password: @password) do |ssh|
+    res = ssh.exec!(@cmd)
+    if !res.blank? # machine has users
+      res.split("\n").each do |line|
+        data = line.split(" ")
+        user = data[0]
+        usage = {
+          host: machine.name,
+          user: user,
+          type: data[1],
+          datetime: DateTime.parse("#{data[2]} #{data[3]}")
+        }
+        User.where(name: user, email: "#{user}#{@email_suffix}").first_or_create
+        puts usage
+      end
     end
-
     ssh.close
   end
-end
-# b = Building.where(name: "rex").first
-# puts b
 
-# Room.create(building: b,
-#             room_number: "W76767",
-#             capacity: 1,
-#             google_calender_id: "meep")
+end
+
+# Machine.all.each_slice(30).to_a.each do |chunk_of_machines|
+#   Process.fork do
+#     chunk_of_machines.each do |machine|
+#       run_for_machine machine
+#     end
+#   end
+#   Process.wait
+# end
+
+Machine.all.each do |machine|
+  run_for_machine machine
+end
+
+# $ ssh suterr@xinu22.cs.purdue.edu
+# $ ssh suterr@xinu23.cs.purdue.edu
+# $ ssh suterr@xinu24.cs.purdue.edu
+# ssh: Could not resolve hostname xinu22.cs.purdue.edu: nodename nor servname provided, or not known
+# $ ssh suterr@pod4-5.cs.purdue.edu
+# ssh: connect to host pod4-5.cs.purdue.edu port 22: Network is unreachable
+
+# Machine.all.each do |machine|
+#   hostname = "#{machine.name}#{@machine_suffix}"
+#   os = machine.room.specifications.first.OS
+#   next if os != "Linux"
+#   Net::SSH.start(hostname, username, password: password) do |ssh|
+#     res = ssh.exec!(cmd)
+#     if !res.blank? # machine has users
+#       res.split("\n").each do |line|
+#         data = line.split(" ")
+#         user = data[0]
+#         usage = {
+#           host: machine.name,
+#           user: user,
+#           type: data[1],
+#           datetime: DateTime.parse("#{data[2]} #{data[3]}")
+#         }
+#         # User.where(name: user, email: "#{user}#{@email_suffix}").first_or_create
+#         puts usage
+#       end
+#     end
+#     ssh.close
+#   end
+# end
+
+# Room.where(room_number: "B148").first.machines.each do |machine|
+
+#   Net::SSH.start("#{machine.name}#{@machine_suffix}", username, password: password) do |ssh|
+
+#     res = ssh.exec!(cmd)
+#     if !res.blank? # machine has users
+#       res.split("\n").each do |line|
+#         data = line.split(" ")
+#         user = data[0]
+#         usage = {
+#           host: machine.name,
+#           user: user,
+#           type: data[1],
+#           datetime: DateTime.parse("#{data[2]} #{data[3]}")
+#         }
+
+#         User.where(name: user, email: "#{user}#{@email_suffix}").first_or_create
+#         puts usage
+#       end
+#     end
+
+#     ssh.close
+#   end
+# end

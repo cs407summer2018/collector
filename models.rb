@@ -7,6 +7,11 @@ end
 class Room < ActiveRecord::Base
   belongs_to :building
   has_many :machines
+  has_many :specifications
+end
+
+class Specification < ActiveRecord::Base
+  belongs_to :room
 end
 
 class Machine < ActiveRecord::Base
