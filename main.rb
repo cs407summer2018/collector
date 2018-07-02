@@ -3,6 +3,7 @@ require "active_record"
 require 'net/ssh'
 
 load "models.rb"
+
 keys = YAML::load_file("env.conf")
 
 @machine_suffix = keys["str"]["machine_suffix"]
@@ -47,16 +48,13 @@ def handle_ssh_output(ssh_output, machine_name)
                      start_time: metadata[:datetime],
                      device: metadata[:type])
               .first_or_create
+
     current_usages[usage[:id]] = usage
   end
 
-  puts "***** on #{machine_name} with machine_id #{machine.id} *****"
-
   stale_usages.each do |stale|
-    matched = current_usages[stale.id]
-    stale.update!(end_time: Time.now) if !matched
+    stale.update!(end_time: Time.now) if !current_usages[stale.id]
   end
-
 end
 
 def ssh_wrapper(machine_name)
@@ -79,5 +77,14 @@ Machine.all.each do |machine|
   run_for_machine machine
 end
 
-# m = Machine.where(name: "borg20").first
-# run_for_machine m
+def run_by_machine_name(name)
+  m = Machine.where(name: name).first
+  run_for_machine m
+end
+
+def run_by_lab_room_number(room_number)
+  r = Room.where(room_number: room_number).first
+  r.machines.each do |m|
+    run_for_machine m
+  end
+end
