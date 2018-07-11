@@ -60,10 +60,14 @@ end
 def ssh_wrapper(machine_name)
   host_name = "#{machine_name}#{@machine_suffix}"
   puts "Attempting to SSH into #{host_name}"
-  Net::SSH.start(host_name, @username, password: @password) do |ssh|
-    res = ssh.exec!("who")
-    handle_ssh_output res, machine_name
-    ssh.close
+  begin
+    Net::SSH.start(host_name, @username, password: @password) do |ssh|
+      res = ssh.exec!("who")
+      handle_ssh_output res, machine_name
+      ssh.close
+    end
+  rescue
+    puts "Couldn't access #{host_name}"
   end
 end
 
@@ -71,10 +75,6 @@ def run_for_machine(machine)
   os = machine.room.specifications.first.OS
   return if os != "Linux"
   ssh_wrapper machine.name
-end
-
-Machine.all.each do |machine|
-  run_for_machine machine
 end
 
 def run_by_machine_name(name)
@@ -88,3 +88,35 @@ def run_by_lab_room_number(room_number)
     run_for_machine m
   end
 end
+
+def run_for_all()
+  Machine.all.each do |machine|
+    run_for_machine machine
+  end
+end
+
+def room_looper(room)
+  start = 0
+  finish = 0
+  begin
+    start = Time.now
+    room.machines.each do |machine|
+      run_for_machine machine
+    end
+    finish = Time.now
+    diff = finish - start
+    puts "*** completed room #{room.room_number} with #{diff} ***"
+  end while (finish - start) > 1
+end
+
+def run_par()
+    puts "##### Starting an execution #####"
+    Room.all.each do |room|
+      fork do
+        room_looper room
+      end
+    end
+    Process.waitall
+end
+
+run_par
