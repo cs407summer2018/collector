@@ -13,11 +13,11 @@ keys = YAML::load_file("env.conf")
 
 ActiveRecord::Base.
   establish_connection(
-    {:adapter  => keys["db"]["adapter"],
+    :adapter  => keys["db"]["adapter"],
      :host     => keys["db"]["host"],
      :username => keys["db"]["username"],
      :password => keys["db"]["password"],
-     :database => keys["db"]["database"]})
+     :database => keys["db"]["database"])
 
 def parse_line_of_cmd_result(line, machine_name)
   data = line.split(" ")
@@ -35,25 +35,49 @@ def handle_ssh_output(ssh_output, machine_name)
   machine = Machine.where(name: machine_name).first
   stale_usages = Usage.where(machine: machine, end_time: nil)
   current_usages = {}
+  usernames_using_machine = []
 
-  ssh_output.split("\n").each do |line|
+  res_lines = ssh_output.split("\n")
+  res_lines.each do |line|
     metadata = parse_line_of_cmd_result line, machine_name
     username = metadata[:user]
-    user = User
-             .where(name: username, email: "#{username}#{@email_suffix}")
-             .first_or_create
+    usernames_using_machine << username
+    begin
+      user = User
+               .where(name: username, email: "#{username}#{@email_suffix}")
+               .first_or_create
+      puts "just inserted #{user.inspect}"
+      # user.touch(:updated_at)
 
-    usage = Usage
-              .where(user: user, machine: machine,
-                     start_time: metadata[:datetime],
-                     device: metadata[:type])
-              .first_or_create
+    rescue => ex
+      puts "EXCEPTION"
+      puts ex
+    end
 
-    current_usages[usage[:id]] = usage
+    begin
+      usage = Usage
+                .where(user: user, machine: machine,
+                       start_time: metadata[:datetime],
+                       device: metadata[:type],
+                       end_time: nil).first_or_create
+      puts "just inserted #{usage.inspect}"
+      # usage.touch(:updated_at)
+
+      current_usages[usage[:id]] = usage
+    rescue => ex
+      puts "EXCEPTION"
+      puts ex
+    end
   end
 
+  # find all Usages on the machine where where not username
+
+
   stale_usages.each do |stale|
-    stale.update!(end_time: Time.now) if !current_usages[stale.id]
+    saltine = current_usages[stale.id]
+    if !saltine
+      stale.update!(end_time: Time.now)
+    end
   end
 end
 
@@ -68,6 +92,14 @@ def ssh_wrapper(machine_name)
     end
   rescue
     puts "Couldn't access #{host_name}"
+    machine = Machine.where(name: machine_name).first
+    stale_usages = Usage.where(machine: machine, end_time: nil)
+
+    if stale_usages.size > 0
+      stale_usages.each do |stale|
+        stale.update!(end_time: Time.now)
+      end
+    end
   end
 end
 
