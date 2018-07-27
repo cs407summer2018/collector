@@ -141,14 +141,21 @@ def room_looper(room)
   end while (finish - start) > 1
 end
 
-def run_par()
-    puts "##### Starting an execution #####"
-    Room.all.each do |room|
-      fork do
-        room_looper room
-      end
-    end
-    Process.waitall
+while true do
+  puts "####################"
+  puts "### Starting run ###"
+  puts "####################"
+  run_for_all
 end
 
-run_par
+# def run_par()
+#     puts "##### Starting an execution #####"
+#     Room.all.each do |room|
+#       fork do
+#         room_looper room
+#       end
+#     end
+#     Process.waitall
+# end
+
+# run_par
